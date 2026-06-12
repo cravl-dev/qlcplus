@@ -177,7 +177,7 @@ if(appimage)
         install(
             FILES
                 ${QT_LIBS_PATH}/libavformat.so
-                ${QT_LIBS_PATH}/libavformat.so.61
+                ${QT_LIBS_PATH}/libavformat.so.60
                 ${LIBAVFORMAT_REAL}
             DESTINATION ${INSTALLROOT}/${LIBSDIR}
         )
