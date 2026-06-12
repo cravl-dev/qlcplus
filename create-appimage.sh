@@ -70,7 +70,7 @@ else
     cd build
 fi
 
-# make check
+make check
 
 if [ ! -d "$TARGET_DIR" ]; then
     mkdir -p $TARGET_DIR
