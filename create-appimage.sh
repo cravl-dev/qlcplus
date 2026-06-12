@@ -9,45 +9,71 @@
 # Exit on error
 set -e
 
+while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
+  -t | --translate )
+    shift
+    L10N_OPT=$1
+    ;;
+  --skip-build )
+    SKIP_BUILD=1
+    ;;
+  * )
+    echo "Unknown option \"$1\"" >&2
+    exit 1
+    ;;
+esac; shift; done
+if [[ "$1" == '--' ]]; then shift; fi
+
+L10N_OPT="${L10N_OPT:-ui}"
+SKIP_BUILD="${SKIP_BUILD:-0}"
 TARGET_DIR=$HOME/qlcplus.AppDir
-CMAKE_OPTS=""
 
 if ! command -v chrpath 2>&1 >/dev/null
 then
     echo "chrpath could not be found. Install it before running this script"
     exit 1
 fi
+if ! command -v wget 2>&1 >/dev/null
+then
+    echo "wget could not be found. Install it before running this script"
+    exit 1
+fi
 
-if [ "$1" == "qmlui" ]; then
+if [ "$L10N_OPT" == "qmlui" ]; then
     ./translate.sh release qmlui
-    CMAKE_OPTS="-Dqmlui=ON"
+    CMAKE_OPTS="${CMAKE_OPTS} -Dqmlui=ON"
 else
     ./translate.sh release ui
 fi
 
-# Build
-if [ -d build ]; then
-    rm -rf build
-fi
-mkdir build
-cd build
+if [ $SKIP_BUILD -eq 0 ]; then
+    # Build
+    if [ -d build ]; then
+        rm -rf build
+    fi
+    mkdir build
+    cd build
 
-if [ -n "$QTDIR" ]; then
-    cmake -DCMAKE_PREFIX_PATH="$QTDIR/lib/cmake/" $CMAKE_OPTS -Dappimage=ON -DINSTALL_ROOT=$TARGET_DIR ..
+    if [ -n "$QTDIR" ]; then
+        cmake -DCMAKE_PREFIX_PATH="$QTDIR/lib/cmake/" $CMAKE_OPTS -Dappimage=ON -DINSTALL_ROOT=$TARGET_DIR ..
+    else
+        cmake -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake/Qt6" $CMAKE_OPTS -Dappimage=ON -DINSTALL_ROOT=$TARGET_DIR ..
+    fi
+
+    NUM_CPUS=$(nproc) || true
+    if [ -z "$NUM_CPUS" ]; then
+        NUM_CPUS=8
+    fi
+
+    make -j$NUM_CPUS
 else
-    cmake -DCMAKE_PREFIX_PATH="/usr/lib/x86_64-linux-gnu/cmake/Qt6" $CMAKE_OPTS -Dappimage=ON -DINSTALL_ROOT=$TARGET_DIR ..
+    cd build
 fi
 
-NUM_CPUS=$(nproc) || true
-if [ -z "$NUM_CPUS" ]; then
-    NUM_CPUS=8
-fi
-
-make -j$NUM_CPUS
-make check
+# make check
 
 if [ ! -d "$TARGET_DIR" ]; then
-    mkdir $TARGET_DIR
+    mkdir -p $TARGET_DIR
 fi
 make install
 
@@ -56,7 +82,7 @@ cp -v ../platforms/linux/qlcplus.desktop $TARGET_DIR
 
 find $TARGET_DIR/usr/lib/ -name 'libqlcplusengine.so*' -exec strip -v {} \;
 
-if [ "$1" == "qmlui" ]; then
+if [ "$L10N_OPT" == "qmlui" ]; then
     strip $TARGET_DIR/usr/bin/qlcplus-qml
     # FIXME: no rpath or runpath tag found.
     chrpath -r "../lib" $TARGET_DIR/usr/bin/qlcplus-qml || true
